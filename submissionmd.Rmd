@@ -1,0 +1,165 @@
+---
+title: "HE3021 Week 3 Tutorial 3 Attempt"
+author: "Lui Yu Sen"
+date: "2/3/2021"
+output: pdf_document
+---
+```{r filepath, include=FALSE}
+filepath <- "C:\\Users\\Lui Yu Sen\\Google Drive\\NTU_study materials\\Economics\\HE3021 Intermediate Econometrics\\Week 3\\HE3021-Week-4-Tutorial-3\\rawdata\\VOLAT.dta"
+```
+```{r setup, echo=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library("tidyverse")
+library("haven")
+library("foreign")
+library("ggplot2")
+library("lmtest")
+library("sandwich")
+library("forecast")
+
+dat <- read_dta(file = filepath)
+dat <- as.data.frame(dat)
+dat$date <- as.Date(sprintf("%.2f.01", dat$date), format = "%Y.%m.%d")
+```
+
+# 1
+
+## (a)
+
+## (b)
+```{r part b, echo=TRUE}
+model <- tslm(rsp500~pcip+i3, ts(data = dat, frequency = 12, start = 1947))
+summary(model)
+```
+An increase of 1 percentage point in the percentage of industrial production leads to an increase of 0.03642 percentage points in the monthly year-on-year SP500 returns on average, holding 3-month T-bill returns constant.  
+An increase of 1 percentage point in the 3-month T-bill returns leads to an decrease of 1.36169 percentage points in the monthly year-on-year SP500 returns on average, holding percentage of industrial production constant.
+
+## (c)
+Only i3 is statistically significant.
+
+## (d)
+$H_0:\beta_1=1$, $H_a:\beta_1\neq-1$, $\alpha=0.05$, $df=554$
+```{r part d, echo=TRUE}
+critregion <- -1+c(-1,1)*qt(0.975, 554)
+print(critregion)
+```
+Since -1.36169 is in the critical region, then we have insufficient evidence to reject the hypothesis $\beta_1=-1$.
+
+## (e)
+Yes, it does imply that, since i3 is signficantly correlated with rsp500. 
+
+## (f)
+No, the model exhibits both non-stationarity and heteroscedascity. Values of rsp500 are autocorrelated with values from other time periods, and the squared residuals are significantly correlated with the explanatory variables.
+```{r heteroscedascity test, echo=TRUE}
+heterotest <- cbind(model$model, na.trim(model$residuals))
+colnames(heterotest)[4] <- "residualsquared"
+heterotest <- mutate(heterotest, residualsquared = residualsquared**2)
+heterotest <- tslm(residualsquared ~ pcip + i3, ts(heterotest, frequency = 12))
+summary(heterotest)
+```
+For both of the explanatory variables, we have sufficient evidence to reject the null hypothesis that there is no correlation between the squared residuals and the explanatory variables.
+```{r stationarity test, echo=TRUE}
+box <- c()
+for (n in 1:24){
+    box_component <- Box.test(dat$rsp500, lag=n, type="Ljung-Box")$p.value
+    box <- c(box, box_component)
+    rm(box_component)
+}
+range(box)
+```
+Testing for time lags of 1 to 24 months shows signficant autocorrelation between values across time periods, we have sufficient evidence to reject the null hypotheses that the values of each time period are independent of values from other time periods. All p-values are less than 0.05.  
+Thus, the conclusions are not reliable.
+
+# 2
+
+## (a)
+An increase of 1 year increases GDP by $\beta_1$ on average, holding other factors constant.  
+An increase of 1 percentage point of interest rate increases GDP of the same time period by $\beta_2$ on average, holding other factors constant.
+An increase of 1 percentage point of interest rate increases GDP of the next time period by $\beta_3$ on average, holding other factors constant, a lagged effect of 1 period.
+
+## (b)
+Family income over generations in low income countries. As family income increases, they should have more resources to allow their children to consume better education, which should allow these children to secure better jobs and allow their own children to consume even better education. The regression model might look like this:
+$$
+\tilde{income}_t=\beta_0+\beta_1 educationyears+u_i \
+where \
+income_t=\alpha_0+\alpha_1income_{t-18}+\tilde{income}_t
+$$
+
+## (c)
+This would mean oscillating values over time, as an increase in the previous period causes a decrease in the current one, and vice versa.  
+An example might be the Taylor rule for central banks. As inflation increases, so does the interest rate, which then leads to a decrease in inflation and thus the central bank reduces the interest rate. The regression model might look like this:
+$$
+\tilde{interestrate}_t=\beta_0+\beta_1 inflationrate+u_i \
+where \
+interestrate_t=\alpha_0+\alpha_1interestrate_{t-1}+\tilde{interestrate}_t
+$$
+
+## (d)
+No, strict exogeneity will not hold. Domestic consumption should be correlated with the previous time period's unemployment, as it takes time for newly unemployed individuals to adjust their consumption habits. It is also correlated with GDP, since $Y=C+I+G+x-M$, where $C$ is domestic consumption and %Y% is national income, which can be accounted using GDP.
+
+## (e)
+No, we cannot assume that time series observations are independently distributed, since the order matters and the realisations are not randomly distributed, and each observation is at least dependent on its preceding and succeeding observation.
+
+# 3
+
+## (a)
+$$
+E[
+\left(\begin{array}{c}
+\bf{u}_{1} \\
+\vdots \\
+\bf{u}_{T}
+\end{array}\right)
+|
+\left(\begin{array}{c}
+\bf{x}_{11} \\
+\vdots \\
+\bf{x}_{T1}
+\end{array}\right),
+\left(\begin{array}{c}
+\bf{x}_{12} \\
+\vdots \\
+\bf{x}_{T2}
+\end{array}\right),
+\left(\begin{array}{c}
+\bf{x}_{13} \\
+\vdots \\
+\bf{x}_{T3}
+\end{array}\right)
+]=0
+$$
+This means that the average error must be 0 for all time periods, independent of x-values for any time period 1 to T.
+$$
+E(\bf{x}^T_{j,k}*\bf{u}_i)=
+E[\left(\begin{array}{c c c c c}
+0 & \cdots & x_{j,k} & \cdots & 0
+\end{array}\right)_{1*T}
+\left(\begin{array}{c}
+0 \\
+\vdots \\
+u_i \\
+\vdots \\
+0
+\end{array}\right)_{T*1}]
+=\bf0 \
+\forall i,j=1,2,3,\cdots,T\ and\ for\ k=1,2,3
+$$
+Decomposing the vectors of x-variables of all time periods into basis vectors, this means that for each independent variable $x_k$, all periods' values must be orthogonal with the error term from all periods, not just when $i=j$. Since $E(\bf{u}_i)=0$, then this means that $E(\bf{x}^T_{j,k}*\bf{u}_i)-E(\bf{x}^T_{j,k})E(\bf{u}_i)=E(\bf{x}^T_{j,k}*\bf{u}_i)-\bf0=\bf0$.
+
+## (b)
+$$
+E(\bf{x}^T_{j,k}*\bf{u}_i)=
+E[\left(\begin{array}{c c c c c}
+0 & \cdots & x_{j,k} & \cdots & 0
+\end{array}\right)_{1*T}
+\left(\begin{array}{c}
+0 \\
+\vdots \\
+u_j \\
+\vdots \\
+0
+\end{array}\right)_{T*1}]
+=\bf0 \
+\forall j=1,2,3,\cdots,T\ and\ for\ k=1,2,3
+$$
+The subscript being j for the vector of error terms means that this only needs to be true for the same time period j, for each independent variable $x_k$.
